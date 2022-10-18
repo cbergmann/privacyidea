@@ -1063,6 +1063,10 @@ def init_token(param, user=None, tokenrealms=None,
             log.error(msg)
             raise TokenAdminError(_("initToken failed: {0!s}").format(msg))
 
+    # We need to save the token to the DB, otherwise the Token
+    # has no id!
+    db_token.save()
+
     # if there is a realm as parameter (and the realm is not empty), but no
     # user, we assign the token to this realm.
     if param.get("realm") and 'user' not in param:
@@ -1074,9 +1078,6 @@ def init_token(param, user=None, tokenrealms=None,
     if user and user.realm:
         realms.append(user.realm)
     if realms or user:
-        # We need to save the token to the DB, otherwise the Token
-        # has no id!
-        db_token.save()
         db_token.set_realms(realms)
 
     # the tokenclass object is created
