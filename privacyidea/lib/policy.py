@@ -185,7 +185,7 @@ from privacyidea.lib.radiusserver import get_radiusservers
 from privacyidea.lib.utils import (check_time_in_range, check_pin_contents,
                                    fetch_one_resource, is_true, check_ip_in_policy,
                                    determine_logged_in_userparams, parse_string_to_dict)
-from privacyidea.lib.utils.compare import compare_values, COMPARATOR_DESCRIPTIONS
+from privacyidea.lib.utils.compare import compare_values, COMPARATOR_DESCRIPTIONS, UNSET, UNSET_DESCRIPTIONS
 from privacyidea.lib.utils.export import (register_import, register_export)
 from privacyidea.lib.user import User
 from privacyidea.lib import _
@@ -801,37 +801,42 @@ class PolicyClass(object):
         dbtoken = None
         for policy in policies:
             include_policy = True
-            for section, key, comparator, value, active in policy['conditions']:
+
+            #migrate to new condition format
+            if len(policy['conditions']) == 5:
+                policy['conditions'].append("exception")
+
+            for section, key, comparator, value, active, unset in policy['conditions']:
                 if (extended_condition_check is CONDITION_CHECK.CHECK_AND_RAISE_EXCEPTION_ON_MISSING
                         or section in extended_condition_check):
                     # We check conditions, either if we are supposed to check everything or if
                     # the section is contained in the extended condition check
                     if active:
                         if section == CONDITION_SECTION.USERINFO:
-                            if not self._policy_matches_info_condition(policy, key, comparator, value,
+                            if not self._policy_matches_info_condition(policy, key, comparator, value, unset, 
                                                                        CONDITION_SECTION.USERINFO,
                                                                        user_object=user_object):
                                 include_policy = False
                                 break
                         elif section == CONDITION_SECTION.TOKENINFO:
                             dbtoken = dbtoken or Token.query.filter(Token.serial == serial).first() if serial else None
-                            if not self._policy_matches_info_condition(policy, key, comparator, value,
+                            if not self._policy_matches_info_condition(policy, key, comparator, value, unset, 
                                                                        CONDITION_SECTION.TOKENINFO,
                                                                        dbtoken=dbtoken):
                                 include_policy = False
                                 break
                         elif section == CONDITION_SECTION.TOKEN:
                             dbtoken = dbtoken or Token.query.filter(Token.serial == serial).first() if serial else None
-                            if not self._policy_matches_token_condition(policy, key, comparator, value, dbtoken):
+                            if not self._policy_matches_token_condition(policy, key, comparator, value, unset, dbtoken):
                                 include_policy = False
                                 break
                         elif section == CONDITION_SECTION.HTTP_REQUEST_HEADER:
-                            if not self._policy_matches_request_header_condition(policy, key, comparator, value,
+                            if not self._policy_matches_request_header_condition(policy, key, comparator, value, unset, 
                                                                                  request_headers):
                                 include_policy = False
                                 break
                         elif section == CONDITION_SECTION.HTTP_ENVIRONMENT:
-                            if not self._policy_matches_request_environ_condition(policy, key, comparator, value,
+                            if not self._policy_matches_request_environ_condition(policy, key, comparator, unset, value, unset, 
                                                                                  request_headers):
                                 include_policy = False
                                 break
@@ -845,7 +850,7 @@ class PolicyClass(object):
         return reduced_policies
 
     @staticmethod
-    def _policy_matches_request_environ_condition(policy, key, comparator, value, request_headers):
+    def _policy_matches_request_environ_condition(policy, key, comparator, value, unset, request_headers):
         """
         :param request_headers: Request Header object
         :type request_headers: Can be accessed using .get()
@@ -863,11 +868,16 @@ class PolicyClass(object):
                     raise PolicyError(
                         "Invalid comparison in the HTTP environment conditions of policy {!r}".format(policy['name']))
             else:
-                log.warning("Unknown HTTP environment key referenced in condition of policy "
-                            "{!r}: {!r}".format(policy["name"], key))
-                log.warning("Available HTTP environment: {!r}".format(request_environ))
-                raise PolicyError("Unknown HTTP environment key referenced in condition of policy "
-                                  "{!r}: {!r}".format(policy["name"], key))
+                if unset == UNSET.TRUE:
+                    return true
+                elif unset == UNSET.FALSE:
+                    return false
+                else:
+                    log.warning("Unknown HTTP environment key referenced in condition of policy "
+                                "{!r}: {!r}".format(policy["name"], key))
+                    log.warning("Available HTTP environment: {!r}".format(request_environ))
+                    raise PolicyError("Unknown HTTP environment key referenced in condition of policy "
+                                      "{!r}: {!r}".format(policy["name"], key))
         else:  # pragma: no cover
             log.error("Policy {!r} has conditions on HTTP environment, but HTTP environment"
                       " is not available. This should not happen - possible "
@@ -895,11 +905,16 @@ class PolicyClass(object):
                     raise PolicyError(
                         "Invalid comparison in the HTTP header conditions of policy {!r}".format(policy['name']))
             else:
-                log.warning("Unknown HTTP header key referenced in condition of policy "
-                            "{!r}: {!r}".format(policy["name"], key))
-                log.warning("Available HTTP headers: {!r}".format(request_headers))
-                raise PolicyError("Unknown HTTP header key referenced in condition of policy "
-                                  "{!r}: {!r}".format(policy["name"], key))
+                if unset == UNSET.TRUE:
+                    return true
+                elif unset == UNSET.FALSE:
+                    return false
+                else:
+                    log.warning("Unknown HTTP header key referenced in condition of policy "
+                                "{!r}: {!r}".format(policy["name"], key))
+                    log.warning("Available HTTP headers: {!r}".format(request_headers))
+                    raise PolicyError("Unknown HTTP header key referenced in condition of policy "
+                                      "{!r}: {!r}".format(policy["name"], key))
         else:  # pragma: no cover
             log.error("Policy {!r} has conditions on HTTP headers, but HTTP header"
                       " is not available. This should not happen - possible "
@@ -909,7 +924,7 @@ class PolicyClass(object):
                               " is not available".format(policy["name"], key))
 
     @staticmethod
-    def _policy_matches_token_condition(policy, key, comparator, value, db_token):
+    def _policy_matches_token_condition(policy, key, comparator, value, unet, db_token):
         """
         This extended policy checks for token attributes, which are existing columns in
         the token DB table.
@@ -944,7 +959,7 @@ class PolicyClass(object):
                               " is not available".format(policy["name"]))
 
     @staticmethod
-    def _policy_matches_info_condition(policy, key, comparator, value, type, user_object=None, dbtoken=None):
+    def _policy_matches_info_condition(policy, key, comparator, value, unset, type, user_object=None, dbtoken=None):
         """
         Check if the given policy matches a certain userinfo or tokeninfo condition depending
         on the specified ``type``.
@@ -974,14 +989,20 @@ class PolicyClass(object):
                     raise PolicyError(
                         "Invalid comparison in the {!s} conditions of policy {!r}".format(type, policy['name']))
             else:
-                log.warning("Unknown {!s} key referenced in a condition of policy {!r}: {!r}".format(
-                    type, policy['name'], key
-                ))
                 # If we do have an user or token object, but the conditions of policies reference
-                # an unknown userinfo or tokeninfo key, we have a misconfiguration and raise an error.
-                raise PolicyError("Unknown key in the {!s} conditions of policy {!r}".format(
-                    type, policy['name']
-                ))
+                # an unknown userinfo or tokeninfo key, we react as configured.
+                if unset == UNSET.TRUE:
+                    return true
+                elif unset == UNSET.FALSE:
+                    return false
+                else:
+                    log.warning("Unknown {!s} key referenced in a condition of policy {!r}: {!r}".format(
+                      type, policy['name'], key
+                    ))
+                    raise PolicyError("Unknown key in the {!s} conditions of policy {!r}".format(
+                        type, policy['name']
+                    ))
+
         else:
             log.error("Policy {!r} has condition on {!s}, but the according object"
                       " is not available - possible programming error "
@@ -1323,7 +1344,7 @@ def set_policy(name=None, scope=None, action=None, realm=None, resolver=None,
     :param check_all_resolvers: If all the resolvers of a user should be
         checked with this policy
     :type check_all_resolvers: bool
-    :param conditions: A list of 5-tuples (section, key, comparator, value, active) of policy conditions
+    :param conditions: A list of 6-tuples (section, key, comparator, value, active, undef) of policy conditions
     :param pinode: A privacyIDEA node or a list of privacyIDEA nodes.
     :return: The database ID od the the policy
     :rtype: int
@@ -1368,14 +1389,15 @@ def set_policy(name=None, scope=None, action=None, realm=None, resolver=None,
     # validate conditions parameter
     if conditions is not None:
         for condition in conditions:
-            if len(condition) != 5:
-                raise ParameterError("Conditions must be 5-tuples: {!r}".format(condition))
-            if not (isinstance(condition[0], str)
-                    and isinstance(condition[1], str)
-                    and isinstance(condition[2], str)
-                    and isinstance(condition[3], str)
-                    and isinstance(condition[4], bool)):
-                raise ParameterError("Conditions must be 5-tuples of four strings and one boolean: {!r}".format(
+            if len(condition) != 6:
+                raise ParameterError("Conditions must be 6-tuples: {!r}".format(condition))
+            if not (isinstance(condition[0], six.string_types)
+                    and isinstance(condition[1], six.string_types)
+                    and isinstance(condition[2], six.string_types)
+                    and isinstance(condition[3], six.string_types)
+                    and isinstance(condition[4], bool)
+                    and isinstance(condition[5], six.string_types)):
+                raise ParameterError("Conditions must be 6-tuples of four strings, one boolean and another string: {!r}".format(
                     condition))
     p1 = Policy.query.filter_by(name=name).first()
     if p1:
@@ -2669,6 +2691,13 @@ def get_policy_condition_comparators():
     return {comparator: {"description": description}
             for comparator, description in COMPARATOR_DESCRIPTIONS.items()}
 
+def get_policy_condition_unset_options():
+    """
+    :return: a dictionary mapping each option how to react to an unset value to a dictionary with the following keys
+     * ``"description"``, a human-readable description of the option
+    """
+    return {comparator: {"description": description}
+            for comparator, description in UNSET_DESCRIPTIONS.items()}
 
 class MatchingError(ServerError):
     pass

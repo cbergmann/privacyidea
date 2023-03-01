@@ -1665,14 +1665,15 @@ class PolicyCondition(MethodsMixin, db.Model):
     comparator = db.Column(db.Unicode(255), nullable=False, default='equals')
     Value = db.Column(db.Unicode(2000), nullable=False, default='')
     active = db.Column(db.Boolean, nullable=False, default=True)
+    undef = db.Column(db.Unicode(255), nullable=False, default=u'exception')
 
     __table_args__ = {'mysql_row_format': 'DYNAMIC'}
 
     def as_tuple(self):
         """
-        :return: the condition as a tuple (section, key, comparator, value, active)
+        :return: the condition as a tuple (section, key, comparator, value, active, undef)
         """
-        return self.section, self.Key, self.comparator, self.Value, self.active
+        return self.section, self.Key, self.comparator, self.Value, self.active, self.undef
 
 
 # ------------------------------------------------------------------
