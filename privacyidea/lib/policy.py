@@ -366,6 +366,7 @@ class ACTION(object):
     SEARCH_ON_ENTER = "search_on_enter"
     TIMEOUT_ACTION = "timeout_action"
     AUTH_CACHE = "auth_cache"
+    DELETION_CONFIRMATION = "deletion_confirmation"
     HIDE_BUTTONS = "hide_buttons"
     HIDE_WELCOME = "hide_welcome_info"
     SHOW_SEED = "show_seed"
@@ -389,6 +390,7 @@ class ACTION(object):
     TOKENGROUP_ADD = "tokengroup_add"
     TOKENGROUP_DELETE = "tokengroup_delete"
     PREFERREDCLIENTMODE = "preferred_client_mode"
+    REQUIRE_DESCRIPTION = "require_description"
 
 
 class TYPE(object):
@@ -2117,6 +2119,14 @@ def get_static_policy_definitions(scope=None):
                 'type': 'int',
                 'desc': _('Limit the number of allowed tokens in a realm.'),
                 'group': GROUP.TOKEN},
+            ACTION.REQUIRE_DESCRIPTION: {
+                'type': 'str',
+                'desc': _('During the rollout process, this policy makes the '
+                          'description required for all selected tokentypes.'),
+                'group': GROUP.ENROLLMENT,
+                'multiple': True,
+                'value': get_token_types()},
+
             ACTION.MAXTOKENUSER: {
                 'type': 'int',
                 'desc': _('Limit the number of tokens a user may have '
@@ -2237,7 +2247,9 @@ def get_static_policy_definitions(scope=None):
             ACTION.CHALLENGERESPONSE: {
                 'type': 'str',
                 'desc': _('This is a whitespace separated list of tokentypes, '
-                          'that can be used with challenge response.')
+                          'that can be used with challenge response.'),
+                'multiple': True,
+                'value': [token_obj.get_class_type() for token_obj in get_token_classes() if "challenge" in token_obj.mode and len(token_obj.mode) > 1]
             },
             ACTION.CHALLENGETEXT: {
                 'type': 'str',
@@ -2555,6 +2567,11 @@ def get_static_policy_definitions(scope=None):
                 'type': 'bool',
                 'desc': _("Per default disabled actions result in disabled buttons. When"
                           " checking this action, buttons of disabled actions are hidden.")
+            },
+            ACTION.DELETION_CONFIRMATION: {
+                'type': 'bool',
+                'desc': _("If this is checked, there will be a confirmation prompt when "
+                          "deleting policies, events, mresolver, resolver or periodic tasks!")
             },
             ACTION.SHOW_SEED: {
                 'type': 'bool',

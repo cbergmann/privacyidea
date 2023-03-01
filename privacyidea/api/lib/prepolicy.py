@@ -68,7 +68,7 @@ The functions of this module are tested in tests/test_api_lib_policy.py
 import logging
 
 from OpenSSL import crypto
-
+from privacyidea.lib import _
 from privacyidea.lib.error import PolicyError, RegistrationError, TokenAdminError, ResourceNotFoundError
 from flask import g, current_app
 from privacyidea.lib.policy import SCOPE, ACTION, REMOTE_USER
@@ -82,6 +82,7 @@ from privacyidea.lib.utils import (parse_timedelta, is_true, generate_charlists_
 from privacyidea.lib.crypto import generate_password
 from privacyidea.lib.auth import ROLE
 from privacyidea.api.lib.utils import getParam, attestation_certificate_allowed, is_fqdn
+from privacyidea.api.lib.policyhelper import get_init_tokenlabel_parameters, get_pushtoken_add_config
 from privacyidea.lib.clientapplication import save_clientapplication
 from privacyidea.lib.config import (get_token_class)
 from privacyidea.lib.tokenclass import ROLLOUTSTATE
@@ -577,31 +578,8 @@ def init_tokenlabel(request=None, action=None):
     """
     params = request.all_data
     user_object = get_user_from_param(params)
-    token_type = getParam(request.all_data, "type", optional, "hotp").lower()
-    # get the serials from a policy definition
-    label_pols = Match.user(g, scope=SCOPE.ENROLL, action=ACTION.TOKENLABEL,
-                            user_object=user_object).action_values(unique=True, allow_white_space_in_action=True)
-    if len(label_pols) == 1:
-        # The policy was set, so we need to set the tokenlabel in the request.
-        request.all_data[ACTION.TOKENLABEL] = list(label_pols)[0]
-
-    issuer_pols = Match.user(g, scope=SCOPE.ENROLL, action=ACTION.TOKENISSUER,
-                             user_object=user_object).action_values(unique=True, allow_white_space_in_action=True)
-    if len(issuer_pols) == 1:
-        request.all_data[ACTION.TOKENISSUER] = list(issuer_pols)[0]
-
-    imageurl_pols = Match.user(g, scope=SCOPE.ENROLL, action=ACTION.APPIMAGEURL,
-                               user_object=user_object).action_values(unique=True, allow_white_space_in_action=True)
-    if len(imageurl_pols) == 1:
-        request.all_data[ACTION.APPIMAGEURL] = list(imageurl_pols)[0]
-
-    # check the force_app_pin policy
-    app_pin_pols = Match.user(g, scope=SCOPE.ENROLL,
-                              action='{0!s}_{1!s}'.format(token_type, ACTION.FORCE_APP_PIN),
-                              user_object=user_object).any()
-    if app_pin_pols:
-        request.all_data[ACTION.FORCE_APP_PIN] = True
-
+    token_type = getParam(params, "type", optional, "hotp").lower()
+    request.all_data = get_init_tokenlabel_parameters(g, params=params, token_type=token_type, user_object=user_object)
     return True
 
 
@@ -1508,40 +1486,7 @@ def pushtoken_add_config(request, action):
     """
     ttype = request.all_data.get("type")
     if ttype and ttype.lower() == "push":
-        ttl = None
-        registration_url = None
-        # Get the firebase configuration from the policies
-        firebase_config = Match.user(g, scope=SCOPE.ENROLL, action=PUSH_ACTION.FIREBASE_CONFIG,
-                                     user_object=request.User if request.User else None)\
-            .action_values(unique=True, allow_white_space_in_action=True)
-        if len(firebase_config) == 1:
-            request.all_data[PUSH_ACTION.FIREBASE_CONFIG] = list(firebase_config)[0]
-        else:
-            raise PolicyError("Missing enrollment policy for push token: {0!s}".format(PUSH_ACTION.FIREBASE_CONFIG))
-
-        # Get the sslverify definition from the policies
-        ssl_verify = Match.user(g, scope=SCOPE.ENROLL, action=PUSH_ACTION.SSL_VERIFY,
-                                user_object=request.User if request.User else None).action_values(unique=True)
-        if len(ssl_verify) == 1:
-            request.all_data[PUSH_ACTION.SSL_VERIFY] = list(ssl_verify)[0]
-        else:
-            request.all_data[PUSH_ACTION.SSL_VERIFY] = "1"
-
-        # Get the TTL and the registration URL from the policies
-        registration_url = Match.user(g, scope=SCOPE.ENROLL, action=PUSH_ACTION.REGISTRATION_URL,
-                                      user_object=request.User if request.User else None) \
-            .action_values(unique=True, allow_white_space_in_action=True)
-        if len(registration_url) == 1:
-            request.all_data[PUSH_ACTION.REGISTRATION_URL] = list(registration_url)[0]
-        else:
-            raise PolicyError("Missing enrollment policy for push token: {0!s}".format(PUSH_ACTION.REGISTRATION_URL))
-        ttl = Match.user(g, scope=SCOPE.ENROLL, action=PUSH_ACTION.TTL,
-                         user_object=request.User if request.User else None) \
-            .action_values(unique=True, allow_white_space_in_action=True)
-        if len(ttl) == 1:
-            request.all_data[PUSH_ACTION.TTL] = list(ttl)[0]
-        else:
-            request.all_data[PUSH_ACTION.TTL] = "10"
+        request.all_data = get_pushtoken_add_config(g, request.all_data, request.User)
 
 
 def u2ftoken_verify_cert(request, action):
@@ -2253,3 +2198,37 @@ def increase_failcounter_on_challenge(request=None, action=None):
     inc_fail_counter = Match.user(g, scope=SCOPE.AUTH, action=ACTION.INCREASE_FAILCOUNTER_ON_CHALLENGE,
                                   user_object=request.User if hasattr(request, 'User') else None).any()
     request.all_data["increase_failcounter_on_challenge"] = inc_fail_counter
+
+
+def require_description(request=None, action=None):
+    """
+    Pre Policy
+    This checks if a description is required to roll out a specific token.
+    scope=SCOPE.ENROLL, action=REQUIRE_DESCRIPTION
+
+    An exception is raised, if the tokentypes specified in the
+    REQUIRE_DESCRIPTION policy match the token to be rolled out,
+    but no description is given.
+
+    :param request:
+    :param action:
+    :return:
+    """
+    params = request.all_data
+    user_object = request.User
+    (role, username, realm, adminuser, adminrealm) = determine_logged_in_userparams(g.logged_in_user, params)
+
+    action_values = Match.generic(g, action=ACTION.REQUIRE_DESCRIPTION,
+                             scope=SCOPE.ENROLL,
+                             adminrealm=adminrealm,
+                             adminuser=adminuser,
+                             user=username,
+                             realm=realm,
+                             user_object=user_object).action_values(unique=False)
+
+    token_types = list(action_values.keys())
+    type_value = request.all_data.get("type") or 'hotp'
+    if type_value in token_types:
+        if not request.all_data.get("description"):
+            log.warning(_("Missing description for {} token.".format(type_value)))
+            raise PolicyError(_("Description required for {} token.".format(type_value)))

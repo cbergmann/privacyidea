@@ -576,6 +576,8 @@ def get_webui_settings(request, response):
                                      user=loginname, realm=realm).any()
         hide_buttons = Match.generic(g, scope=SCOPE.WEBUI, action=ACTION.HIDE_BUTTONS,
                                      user=loginname, realm=realm).any()
+        deletion_confirmation = Match.generic(g, scope=SCOPE.WEBUI, action=ACTION.DELETION_CONFIRMATION,
+                                     user=loginname, realm=realm).any()
         default_tokentype_pol = Match.generic(g, scope=SCOPE.WEBUI, action=ACTION.DEFAULT_TOKENTYPE,
                                               user=loginname, realm=realm).action_values(unique=True)
         show_seed = Match.generic(g, scope=SCOPE.WEBUI, action=ACTION.SHOW_SEED,
@@ -589,6 +591,8 @@ def get_webui_settings(request, response):
                                                     user=loginname, realm=realm).action_values(unique=True)
         logout_redirect_url_pol = Match.generic(g, scope=SCOPE.WEBUI, action=ACTION.LOGOUT_REDIRECT,
                                                 user=loginname, realm=realm).action_values(unique=True)
+        require_description = Match.generic(g, scope=SCOPE.ENROLL, action=ACTION.REQUIRE_DESCRIPTION,
+                                            user=loginname, realm=realm).action_values(unique=False)
 
         qr_image_android = create_img(DEFAULT_ANDROID_APP_URL) if qr_android_authenticator else None
         qr_image_ios = create_img(DEFAULT_IOS_APP_URL) if qr_ios_authenticator else None
@@ -596,6 +600,7 @@ def get_webui_settings(request, response):
         audit_page_size = DEFAULT_AUDIT_PAGE_SIZE
         token_page_size = DEFAULT_PAGE_SIZE
         user_page_size = DEFAULT_PAGE_SIZE
+        require_description = list(require_description.keys())
         default_tokentype = DEFAULT_TOKENTYPE
         logout_redirect_url = ""
         if len(audit_page_size_pol) == 1:
@@ -649,6 +654,7 @@ def get_webui_settings(request, response):
         content["result"]["value"]["token_rollover"] = token_rollover
         content["result"]["value"]["hide_welcome"] = hide_welcome
         content["result"]["value"]["hide_buttons"] = hide_buttons
+        content["result"]["value"]["deletion_confirmation"] = deletion_confirmation
         content["result"]["value"]["show_seed"] = show_seed
         content["result"]["value"]["show_node"] = get_privacyidea_node() if show_node else ""
         content["result"]["value"]["subscription_status"] = subscription_status()
@@ -658,6 +664,7 @@ def get_webui_settings(request, response):
         content["result"]["value"]["qr_image_ios"] = qr_image_ios
         content["result"]["value"]["qr_image_custom"] = qr_image_custom
         content["result"]["value"]["logout_redirect_url"] = logout_redirect_url
+        content["result"]["value"]["require_description"] = require_description
         response.set_data(json.dumps(content))
     return response
 

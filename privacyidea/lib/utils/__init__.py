@@ -26,6 +26,8 @@ This is the library with base functions for privacyIDEA.
 
 This module is tested in tests/test_lib_utils.py
 """
+import os
+
 import six
 import logging
 from importlib import import_module
@@ -46,6 +48,7 @@ import importlib_metadata
 import time
 import html
 import segno
+import mimetypes
 
 from privacyidea.lib.error import ParameterError, ResourceNotFoundError, PolicyError
 
@@ -1308,6 +1311,7 @@ def create_tag_dict(logged_in_user=None,
                     googleurl_value=None,
                     client_ip=None,
                     pin=None,
+                    challenge=None,
                     escape_html=False):
     """
     This helper function creates a dictionary with tags to be used in sending emails
@@ -1324,7 +1328,8 @@ def create_tag_dict(logged_in_user=None,
     :param registrationcode: The registration code of a token
     :param googleurl_value: The URL for the QR code during token enrollemnt
     :param client_ip: The IP of the client
-    :param pin: the PIN of a token
+    :param pin: The PIN of a token
+    :param challenge: The challenge data
     :param escape_html: Whether the values for the tags should be html escaped
     :return: The tag dictionary
     """
@@ -1351,7 +1356,8 @@ def create_tag_dict(logged_in_user=None,
                 client_ip=client_ip,
                 pin=pin,
                 ua_browser=request.user_agent.browser if request else "",
-                ua_string=request.user_agent.string if request else "")
+                ua_string=request.user_agent.string if request else "",
+                challenge=challenge if challenge else "")
     if escape_html:
         escaped_tags = {}
         for key, value in tags.items():
@@ -1486,3 +1492,25 @@ def replace_function_event_handler(text, token_serial=None, tokenowner=None, log
     except(ValueError, KeyError) as err:
         log.warning("Unable to replace placeholder: ({0!s})! Please check the webhooks data option.".format(err))
         return text
+
+
+def convert_imagefile_to_dataimage(imagepath):
+    """
+    This helper reads an image file and converts it to a dataimage string,
+    that can be directly used in HTML pages.
+
+    :param imagepath:
+    :return: A dataimage as string
+    """
+    try:
+        mime, _ = mimetypes.guess_type(imagepath)
+        if not mime:
+            log.warning("Unknown file type in file {0!s}.".format(imagepath))
+            return ""
+        with open(imagepath, "rb") as f:
+            data = f.read()
+            data64 = base64.b64encode(data)
+        return "data:{0!s};base64,{1!s}".format(mime, to_unicode(data64))
+    except FileNotFoundError:
+        log.warning("The file {0!s} could not be found.".format(imagepath))
+        return ""

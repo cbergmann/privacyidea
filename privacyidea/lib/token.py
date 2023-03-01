@@ -1071,34 +1071,38 @@ def init_token(param, user=None, tokenrealms=None,
     # and to the user realm
     if user and user.realm:
         realms.append(user.realm)
-    if realms or user:
-        # We need to save the token to the DB, otherwise the Token
-        # has no id!
-        db_token.save()
-        db_token.set_realms(realms)
-
-    # the tokenclass object is created
-    tokenobject = create_tokenclass_object(db_token)
-
-    if token_count == 0:
-        # if this token is a newly created one, we have to setup the defaults,
-        # which later might be overwritten by the tokenobject.update(param)
-        tokenobject.set_defaults()
-
-    # Set the user of the token
-    if user is not None and user.login != "":
-        tokenobject.add_user(user)
-
-    tokenobject.update(param)
 
     try:
         # Save the token to the database
-        db_token.save()
+        if token_count == 0:
+            db_token.save()
 
-    except Exception as e:  # pragma: no cover
-        log.error('token create failed!')
+        # the tokenclass object is created
+        tokenobject = create_tokenclass_object(db_token)
+
+        if token_count == 0:
+            # if this token is a newly created one, we have to setup the defaults,
+            # which later might be overwritten by the tokenobject.update(param)
+            tokenobject.set_defaults()
+
+        # Set the user of the token
+        if user is not None and user.login != "":
+            tokenobject.add_user(user)
+
+        # Set the token realms (updates the TokenRealm table)
+        if realms or user:
+            db_token.set_realms(realms)
+
+        tokenobject.update(param)
+
+    except Exception as e:
+        log.error('token create failed: {0!s}'.format(e))
         log.debug("{0!s}".format(traceback.format_exc()))
-        raise TokenAdminError(_("token create failed {0!r}").format(e), id=1112)
+        # delete the newly created token from the db
+        if token_count == 0:
+            db_token.delete()
+        raise
+#        raise TokenAdminError(_("token create failed {0!r}").format(e), id=1112)
 
     # We only set the tokenkind here, if it was explicitly set in the
     # init_token call.
@@ -1110,9 +1114,9 @@ def init_token(param, user=None, tokenrealms=None,
     validity_period_start = param.get("validity_period_start")
     validity_period_end = param.get("validity_period_end")
     if validity_period_end:
-        set_validity_period_end(serial, user, validity_period_end)
+        tokenobject.set_validity_period_end(validity_period_end)
     if validity_period_start:
-        set_validity_period_start(serial, user, validity_period_start)
+        tokenobject.set_validity_period_start(validity_period_start)
 
     return tokenobject
 
@@ -2135,7 +2139,7 @@ def weigh_token_type(token_obj):
         return ord(token_obj.type[0])
 
 
-@log_with(log)
+@log_with(log, hide_args=[1])
 @libpolicy(reset_all_user_tokens)
 @libpolicy(generic_challenge_response_reset_pin)
 @libpolicy(generic_challenge_response_resync)
@@ -2190,8 +2194,7 @@ def check_token_list(tokenobject_list, passw, user=None, options=None, allow_res
 
     # Remove certain disabled tokens from tokenobject_list
     if len(tokenobject_list) > 0:
-        tokenobject_list = [token for token in tokenobject_list if (token.is_active()
-                                                                    or token.check_if_disabled)]
+        tokenobject_list = [token for token in tokenobject_list if token.use_for_authentication(options)]
 
     for tokenobject in sorted(tokenobject_list, key=weigh_token_type):
         if log.isEnabledFor(logging.DEBUG):

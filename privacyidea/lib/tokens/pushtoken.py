@@ -36,6 +36,7 @@ from dateutil.parser import isoparse
 import traceback
 
 from privacyidea.api.lib.utils import getParam
+from privacyidea.api.lib.policyhelper import get_pushtoken_add_config
 from privacyidea.lib.token import get_one_token, init_token
 from privacyidea.lib.utils import prepare_result, to_bytes, is_true
 from privacyidea.lib.error import (ResourceNotFoundError, ValidateError,
@@ -260,15 +261,12 @@ class PushTokenClass(TokenClass):
     """
     mode = [AUTHENTICATIONMODE.AUTHENTICATE, AUTHENTICATIONMODE.CHALLENGE, AUTHENTICATIONMODE.OUTOFBAND]
     client_mode = CLIENTMODE.POLL
-    # A disabled PUSH token has to be removed from the list of checked tokens.
-    check_if_disabled = False
     # If the token is enrollable via multichallenge
     is_multichallenge_enrollable = True
 
     def __init__(self, db_token):
         TokenClass.__init__(self, db_token)
         self.set_type("push")
-        self.mode = ['challenge', 'authenticate']
         self.hKeyRequired = False
 
     @staticmethod
@@ -388,6 +386,11 @@ class PushTokenClass(TokenClass):
                 ret = res
 
         return ret
+
+    @log_with(log)
+    def use_for_authentication(self, options):
+        # A disabled PUSH token has to be removed from the list of checked tokens.
+        return self.is_active()
 
     @log_with(log)
     def update(self, param, reset_failcount=True):
@@ -1018,28 +1021,14 @@ class PushTokenClass(TokenClass):
         :return: None, the content is modified
         """
         # Get the firebase configuration from the policies
-        firebase_config = Match.user(g, scope=SCOPE.ENROLL, action=PUSH_ACTION.FIREBASE_CONFIG,
-                                     user_object=user_obj if user_obj else None) \
-            .action_values(unique=True, allow_white_space_in_action=True)
-        registration_url = Match.user(g, scope=SCOPE.ENROLL, action=PUSH_ACTION.REGISTRATION_URL,
-                                      user_object=user_obj if user_obj else None)\
-            .action_values(unique=True)
-        ssl_verify = Match.user(g, scope=SCOPE.ENROLL, action=PUSH_ACTION.SSL_VERIFY,
-                                      user_object=user_obj if user_obj else None) \
-            .action_values(unique=True)
-        # do an early exit
-        if (not firebase_config) or (not registration_url) or (not ssl_verify):
-            log.warning("Multichallenge Enrollment for PUSH token. But either of "
-                        "{0!s}, {1!s} or {2!s} is missing in policies.".format(
-                PUSH_ACTION.FIREBASE_CONFIG, PUSH_ACTION.REGISTRATION_URL, PUSH_ACTION.SSL_VERIFY))
-            return
+        params = get_pushtoken_add_config(g, user_obj=user_obj)
         token_obj = init_token({"type": cls.get_class_type(),
                                 "genkey": 1,
                                 "2stepinit": 1}, user=user_obj)
         # We are in step 1:
         token_obj.add_tokeninfo("enrollment_credential", geturandom(20, hex=True))
         # We also store the Firebase config, that was used during the enrollment.
-        token_obj.add_tokeninfo(PUSH_ACTION.FIREBASE_CONFIG, list(firebase_config)[0])
+        token_obj.add_tokeninfo(PUSH_ACTION.FIREBASE_CONFIG, params.get(PUSH_ACTION.FIREBASE_CONFIG))
         content.get("result")["value"] = False
         content.get("result")["authentication"] = "CHALLENGE"
 
@@ -1047,8 +1036,7 @@ class PushTokenClass(TokenClass):
         # Create a challenge!
         c = token_obj.create_challenge(options={"session": CHALLENGE_SESSION.ENROLLMENT})
         # get details of token
-        init_details = token_obj.get_init_detail(params={PUSH_ACTION.REGISTRATION_URL: list(registration_url)[0],
-                                                         PUSH_ACTION.SSL_VERIFY: list(ssl_verify)[0]})
+        init_details = token_obj.get_init_detail(params=params)
         detail["transaction_ids"] = [c[2]]
         chal = {"transaction_id": c[2],
                 "image": init_details.get("pushurl", {}).get("img"),

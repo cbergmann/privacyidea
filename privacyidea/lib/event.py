@@ -91,10 +91,10 @@ class event(object):
                     event_audit_data["info"] = e_handler_def.get("name")
                     event_audit.log(event_audit_data)
 
-                    event_handler.do(e_handler_def.get("action"),
-                                     options=options)
+                    result = event_handler.do(e_handler_def.get("action"),
+                                               options=options)
                     # set audit object to success
-                    event_audit.log({"success": True})
+                    event_audit.log({"success": result})
                     event_audit.finalize_log()
 
             f_result = func(*args, **kwds)
@@ -131,12 +131,12 @@ class event(object):
                     event_audit_data["info"] = e_handler_def.get("name")
                     event_audit.log(event_audit_data)
 
-                    event_handler.do(e_handler_def.get("action"),
-                                     options=options)
+                    result = event_handler.do(e_handler_def.get("action"),
+                                               options=options)
                     # In case the handler has modified the response
                     f_result = options.get("response")
                     # set audit object to success
-                    event_audit.log({"success": True})
+                    event_audit.log({"success": result})
                     event_audit.finalize_log()
 
             return f_result
@@ -164,6 +164,7 @@ def get_handler_object(handlername):
     from privacyidea.lib.eventhandler.responsemangler import ResponseManglerEventHandler
     from privacyidea.lib.eventhandler.logginghandler import LoggingEventHandler
     from privacyidea.lib.eventhandler.customuserattributeshandler import CustomUserAttributesHandler
+    from privacyidea.lib.eventhandler.webhookeventhandler import WebHookHandler
     h_obj = None
     if handlername == "UserNotification":
         h_obj = UserNotificationEventHandler()
@@ -183,6 +184,8 @@ def get_handler_object(handlername):
         h_obj = LoggingEventHandler()
     elif handlername == "CustomUserAttributes":
         h_obj = CustomUserAttributesHandler()
+    elif handlername == "WebHook":
+        h_obj = WebHookHandler()
     return h_obj
 
 

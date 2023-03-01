@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import six
+import logging
+from testfixtures import log_capture
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -42,7 +44,6 @@ import datetime
 import time
 import responses
 import mock
-import binascii
 from . import smtpmock, ldap3mock, radiusmock
 
 
@@ -2263,7 +2264,7 @@ class ValidateAPITestCase(MyApiTestCase):
                               "type": "hotp",
                               "otpkey": self.otpkey,
                               "pin": pin}, user)
-        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=HOTP".format(
+        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=hotp".format(
             ACTION.CHALLENGERESPONSE))
         # both tokens will be a valid challenge response token!
 
@@ -2341,7 +2342,7 @@ class ValidateAPITestCase(MyApiTestCase):
                               "type": "hotp",
                               "otpkey": self.otpkey,
                               "pin": pinB}, user)
-        set_policy("test48", scope=SCOPE.AUTH, action="{0!s}=HOTP".format(
+        set_policy("test48", scope=SCOPE.AUTH, action="{0!s}=hotp".format(
             ACTION.CHALLENGERESPONSE))
         # both tokens will be a valid challenge response token!
 
@@ -2443,7 +2444,7 @@ class ValidateAPITestCase(MyApiTestCase):
                               "type": "hotp",
                               "otpkey": self.otpkey,
                               "pin": pin}, user)
-        set_policy("test48", scope=SCOPE.AUTH, action="{0!s}=HOTP".format(
+        set_policy("test48", scope=SCOPE.AUTH, action="{0!s}=hotp".format(
             ACTION.CHALLENGERESPONSE))
         # both tokens will be a valid challenge response token!
 
@@ -3278,6 +3279,88 @@ class RegistrationAndPasswordToken(MyApiTestCase):
         # delete token
         remove_token(serial)
 
+    def test_02_application_specific_password_token(self):
+        # The appl spec password token requires either an otpkey or genkey
+        with self.app.test_request_context('/token/init',
+                                           method='POST',
+                                           data={'user': 'cornelius',
+                                                 'type': 'applspec'},
+                                           headers={'Authorization': self.at}):
+            res = self.app.full_dispatch_request()
+            self.assertEqual(400, res.status_code)
+            data = res.json
+            error = data.get("result").get("error")
+            self.assertEqual(905, error.get("code"))
+            self.assertEqual("ERR905: Missing parameter: 'otpkey'", error.get("message"), data)
+
+        with self.app.test_request_context('/token/init',
+                                           method='POST',
+                                           data={'user': 'cornelius',
+                                                 'genkey': '1',
+                                                 'type': 'applspec'},
+                                           headers={'Authorization': self.at}):
+            res = self.app.full_dispatch_request()
+            self.assertEqual(400, res.status_code)
+            data = res.json
+            error = data.get("result").get("error")
+            self.assertEqual(905, error.get("code"))
+            self.assertEqual("ERR905: Missing parameter: 'service_id'", error.get("message"), data)
+
+        # Now pass all necessary parameters
+        with self.app.test_request_context('/token/init',
+                                           method='POST',
+                                           data={'user': 'cornelius',
+                                                 'type': 'applspec',
+                                                 'genkey': '1',
+                                                 'service_id': 'thunderbird',
+                                                 'pin': 'test'},
+                                           headers={'Authorization': self.at}):
+            res = self.app.full_dispatch_request()
+            self.assertEqual(200, res.status_code)
+            data = res.json
+            detail = data.get("detail")
+            serial = detail.get("serial")
+            password = detail.get("password")
+
+        # Check, if the token has the service_id
+        tok = get_tokens(serial=serial)[0]
+        self.assertEqual("thunderbird", tok.service_id)
+
+        # now check the authentication. No service_id
+        with self.app.test_request_context('/validate/check',
+                                           method='POST',
+                                           data={"user": "cornelius",
+                                                 "pass": "test{0!s}".format(password)}):
+            res = self.app.full_dispatch_request()
+            self.assertTrue(res.status_code == 200, res)
+            data = res.json
+            self.assertEqual("REJECT", data.get("result").get("authentication"), data)
+
+        # now check the authentication. wrong service_id
+        with self.app.test_request_context('/validate/check',
+                                           method='POST',
+                                           data={"user": "cornelius",
+                                                 "service_id": "wrong",
+                                                 "pass": "test{0!s}".format(password)}):
+            res = self.app.full_dispatch_request()
+            self.assertTrue(res.status_code == 200, res)
+            data = res.json
+            self.assertEqual("REJECT", data.get("result").get("authentication"), data)
+
+        # now check the authentication. correct service_id
+        with self.app.test_request_context('/validate/check',
+                                           method='POST',
+                                           data={"user": "cornelius",
+                                                 "service_id": "thunderbird",
+                                                 "pass": "test{0!s}".format(password)}):
+            res = self.app.full_dispatch_request()
+            self.assertTrue(res.status_code == 200, res)
+            data = res.json
+            self.assertEqual("ACCEPT", data.get("result").get("authentication"), data)
+
+        # delete token
+        remove_token(serial)
+
 
 class WebAuthn(MyApiTestCase):
 
@@ -3867,7 +3950,7 @@ class MultiChallege(MyApiTestCase):
                              "type": "hotp",
                              "otpkey": "31323334353637383930313233343536373839AA",
                              "pin": "otppin"}, user=User("selfservice", self.realm1))
-        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=HOTP".format(
+        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=hotp".format(
             ACTION.CHALLENGERESPONSE))
 
         set_policy("test", scope=SCOPE.AUTH, action="{0!s}=poll, webauthn, interactive, u2f".format(
@@ -3901,7 +3984,7 @@ class MultiChallege(MyApiTestCase):
                               "type": "hotp",
                               "otpkey": self.otpkey,
                               "pin": pin}, user)
-        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=HOTP".format(
+        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=hotp".format(
             ACTION.CHALLENGERESPONSE))
 
         with self.app.test_request_context('/validate/check',
@@ -3931,7 +4014,7 @@ class MultiChallege(MyApiTestCase):
                               "type": "hotp",
                               "otpkey": self.otpkey,
                               "pin": pin}, user)
-        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=HOTP".format(
+        set_policy("test49", scope=SCOPE.AUTH, action="{0!s}=hotp".format(
             ACTION.CHALLENGERESPONSE))
         # both tokens will be a valid challenge response token!
         set_policy("test", scope=SCOPE.AUTH, action="{0!s}=wrong, falsch, Chigau, sbagliato".format(
@@ -5336,9 +5419,11 @@ class MultiChallengeEnrollTest(MyApiTestCase):
         self.assertTrue(r > 0)
 
     @ldap3mock.activate
-    def test_01_enroll_HOTP(self):
+    @log_capture(level=logging.DEBUG)
+    def test_01_enroll_HOTP(self, capture):
         # Init LDAP
         ldap3mock.setLDAPDirectory(LDAPDirectory)
+        logging.getLogger('privacyidea').setLevel(logging.DEBUG)
         # create realm
         r = set_realm("ldaprealm", resolvers=["catchall"])
         set_default_realm("ldaprealm")
@@ -5362,6 +5447,10 @@ class MultiChallengeEnrollTest(MyApiTestCase):
         # Set enroll policy
         set_policy("pol_multienroll", scope=SCOPE.AUTH,
                    action="{0!s}=hotp".format(ACTION.ENROLL_VIA_MULTICHALLENGE))
+
+        # Set force_app_pin
+        set_policy("pol_forcepin", scope=SCOPE.ENROLL,
+                   action="hotp_{0!s}=True".format(ACTION.FORCE_APP_PIN))
         # Now we should get an authentication Challenge
         with self.app.test_request_context('/validate/check',
                                            method='POST',
@@ -5377,10 +5466,13 @@ class MultiChallengeEnrollTest(MyApiTestCase):
             transaction_id = detail.get("transaction_id")
             self.assertTrue("Please scan the QR code!" in detail.get("message"), detail.get("message"))
             # Get image and client_mode
-            self.assertEqual(CLIENTMODE.INTERACTIVE, detail.get("client_mode"))
+            self.assertEqual(CLIENTMODE.INTERACTIVE, detail.get("client_mode"), detail)
             # Check, that multi_challenge is also contained.
-            self.assertEqual(CLIENTMODE.INTERACTIVE, detail.get("multi_challenge")[0].get("client_mode"))
-            self.assertIn("image", detail)
+            chal = detail.get("multi_challenge")[0]
+            self.assertEqual(CLIENTMODE.INTERACTIVE, chal.get("client_mode"), detail)
+            self.assertIn("image", detail, detail)
+            self.assertEqual(1, len(detail.get("messages")))
+            self.assertEqual("Please scan the QR code!", detail.get("messages")[0])
             serial = detail.get("serial")
 
         # 3. scan the qrcode / Get the OTP value
@@ -5400,9 +5492,18 @@ class MultiChallengeEnrollTest(MyApiTestCase):
             self.assertTrue(result.get("value"))
             self.assertEqual(result.get("authentication"), "ACCEPT")
 
+        log_msg = str(capture)
+        self.assertNotIn('alicepw', log_msg, log_msg)
+        self.assertNotIn('ldappw', log_msg, log_msg)
+        self.assertIn('HIDDEN', log_msg, log_msg)
+        # Verify that the force_pin enrollment policy worked for validate-check-enrollment
+        self.assertIn('Exiting get_init_tokenlabel_parameters with result {\'force_app_pin\': True}', log_msg, log_msg)
+        logging.getLogger('privacyidea').setLevel(logging.INFO)
+
         # Cleanup
         delete_policy("pol_passthru")
         delete_policy("pol_multienroll")
+        delete_policy("pol_forcepin")
         remove_token(serial)
 
     @ldap3mock.activate
