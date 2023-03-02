@@ -869,9 +869,9 @@ class PolicyClass(object):
                         "Invalid comparison in the HTTP environment conditions of policy {!r}".format(policy['name']))
             else:
                 if unset == UNSET.TRUE:
-                    return true
+                    return True
                 elif unset == UNSET.FALSE:
-                    return false
+                    return False
                 else:
                     log.warning("Unknown HTTP environment key referenced in condition of policy "
                                 "{!r}: {!r}".format(policy["name"], key))
@@ -906,9 +906,9 @@ class PolicyClass(object):
                         "Invalid comparison in the HTTP header conditions of policy {!r}".format(policy['name']))
             else:
                 if unset == UNSET.TRUE:
-                    return true
+                    return True
                 elif unset == UNSET.FALSE:
-                    return false
+                    return False
                 else:
                     log.warning("Unknown HTTP header key referenced in condition of policy "
                                 "{!r}: {!r}".format(policy["name"], key))
@@ -992,9 +992,9 @@ class PolicyClass(object):
                 # If we do have an user or token object, but the conditions of policies reference
                 # an unknown userinfo or tokeninfo key, we react as configured.
                 if unset == UNSET.TRUE:
-                    return true
+                    return True
                 elif unset == UNSET.FALSE:
-                    return false
+                    return False
                 else:
                     log.warning("Unknown {!s} key referenced in a condition of policy {!r}: {!r}".format(
                       type, policy['name'], key
