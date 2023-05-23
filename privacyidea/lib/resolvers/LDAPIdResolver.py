@@ -61,7 +61,6 @@ import logging
 import yaml
 import threading
 import functools
-import six
 
 from .UserIdResolver import UserIdResolver
 
@@ -120,11 +119,7 @@ elif os.path.isfile("/etc/ssl/certs/ca-bundle.crt"):
 else:
     DEFAULT_CA_FILE = "/etc/privacyidea/ldap-ca.crt"
 
-try:
-    TLS_NEGOTIATE_PROTOCOL = ssl.PROTOCOL_TLS
-except AttributeError as _e:
-    # this is Python < 2.7.13, it does not provide ssl.PROTOCOL_TLS
-    TLS_NEGOTIATE_PROTOCOL = ssl.PROTOCOL_SSLv23
+TLS_NEGOTIATE_PROTOCOL = ssl.PROTOCOL_TLS
 
 DEFAULT_TLS_PROTOCOL = TLS_NEGOTIATE_PROTOCOL
 
@@ -776,7 +771,7 @@ class IdResolver (UserIdResolver):
         s = "{0!s}{1!s}{2!s}{3!s}".format(self.uri, self.basedn,
                                            self.searchfilter,
                                            sorted(self.userinfo.items(), key=itemgetter(0)))
-        r = binascii.hexlify(hashlib.sha1(s.encode("utf-8")).digest())
+        r = binascii.hexlify(hashlib.sha1(s.encode("utf-8")).digest())  # nosec B324 # hash used as unique identifier
         return r.decode('utf8')
 
     @staticmethod

@@ -65,11 +65,10 @@ import string
 import datetime
 import os
 import logging
-from six import string_types
 
 from sqlalchemy import (and_, func)
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql import expression
+from sqlalchemy.sql.expression import FunctionElement
 from privacyidea.lib.error import (TokenAdminError,
                                    ParameterError,
                                    privacyIDEAError, ResourceNotFoundError)
@@ -115,8 +114,9 @@ ENCODING = "utf-8"
 # compare operation.
 # By using <https://docs.sqlalchemy.org/en/13/core/compiler.html> we can
 # differentiate between different dialects.
-class clob_to_varchar(expression.FunctionElement):
+class clob_to_varchar(FunctionElement):
     name = 'clob_to_varchar'
+    inherit_cache = True
 
 
 @compiles(clob_to_varchar)
@@ -493,7 +493,7 @@ def get_tokens_paginate(tokentype=None, realm=None, assigned=None, user=None,
                                 description=description, userid=userid,
                                 allowed_realms=allowed_realms)
 
-    if isinstance(sortby, string_types):
+    if isinstance(sortby, str):
         # check that the sort column exists and convert it to a Token column
         cols = Token.__table__.columns
         if sortby in cols:
@@ -1102,7 +1102,6 @@ def init_token(param, user=None, tokenrealms=None,
         if token_count == 0:
             db_token.delete()
         raise
-#        raise TokenAdminError(_("token create failed {0!r}").format(e), id=1112)
 
     # We only set the tokenkind here, if it was explicitly set in the
     # init_token call.
@@ -1118,6 +1117,8 @@ def init_token(param, user=None, tokenrealms=None,
     if validity_period_start:
         tokenobject.set_validity_period_start(validity_period_start)
 
+    # Safe the token object to make sure all changes are persisted in the db
+    tokenobject.save()
     return tokenobject
 
 
@@ -1332,7 +1333,7 @@ def set_pin(serial, pin, user=None, encrypt_pin=False):
     :return: The number of PINs set (usually 1)
     :rtype: int
     """
-    if isinstance(user, string_types):
+    if isinstance(user, str):
         # check if by accident the wrong parameter (like PIN)
         # is put into the user attribute
         log.warning("Parameter user must not be a string: {0!r}".format(user))

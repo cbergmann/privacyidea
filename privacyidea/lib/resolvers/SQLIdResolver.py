@@ -48,7 +48,6 @@ from privacyidea.lib.lifecycle import register_finalizer
 from privacyidea.lib.utils import (is_true, censor_connect_string,
                                    convert_column_to_unicode)
 from passlib.context import CryptContext
-from base64 import b64decode, b64encode
 from passlib.utils import h64
 from passlib.utils.compat import uascii_to_str
 from passlib.utils.compat import unicode as pl_unicode
@@ -174,7 +173,7 @@ class IdResolver (UserIdResolver):
         self.port = 0
         self.limit = 100
         self.user = ""
-        self.password = ""
+        self.password = "" # nosec B105 # default parameter
         self.table = ""
         self.TABLE = None
         self.map = {}
@@ -416,7 +415,7 @@ class IdResolver (UserIdResolver):
                     str(self.pool_recycle),
                     str(self.pool_timeout))
         id_str = "\x00".join(id_parts)
-        resolver_id = binascii.hexlify(hashlib.sha1(id_str.encode('utf8')).digest())
+        resolver_id = binascii.hexlify(hashlib.sha1(id_str.encode('utf8')).digest())  # nosec B324 # hash used as unique identifier
         return "sql." + resolver_id.decode('utf8')
 
     @staticmethod
@@ -536,7 +535,7 @@ class IdResolver (UserIdResolver):
         Server, Database
         """
         port = ""
-        password = ""
+        password = "" # nosec B105 # default parameter
         conParams = ""
         if param.get("Port"):
             port = ":{0!s}".format(param.get("Port"))

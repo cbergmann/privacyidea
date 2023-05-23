@@ -18,14 +18,16 @@
 # License along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 #
+import os
+import time
+import sys
 import contextlib
 import getopt
 import logging
-from privacyidea.lib.security.default import DefaultSecurityModule
+from privacyidea.lib.security.default import (DefaultSecurityModule,
+                                              int_list_to_bytestring)
 from privacyidea.lib.error import HSMException
-from six import int2byte
 from getpass import getpass
-import sys
 
 
 __doc__ = """
@@ -56,13 +58,10 @@ except ImportError:
     log.info("The python module PyKCS11 is not available. "
              "So we can not use the PKCS11 security module.")
 
-
-def int_list_to_bytestring(int_list):  # pragma: no cover
-    return b"".join([int2byte(i) for i in int_list])
-
-import os
-import time
-DEFAULT_LOCK_DIR = "/dev/shm/pilock"
+# The lock directory is used for locking the different processes during startup
+# to avoid a deadlock when accessing the HSM.
+# The directory for logging can be configured via PI_HSM_MODULE_LOCK_DIR in pi.cfg
+DEFAULT_LOCK_DIR = "/dev/shm/pilock"  # nosec B108 # Used for locking during startup
 DEFAULT_TIMEOUT = 15
 
 
@@ -355,7 +354,7 @@ if __name__ == "__main__":  # pragma: no cover
         log.info("password encrypt/decrypt test successful")
 
         # pin
-        password = "topSekr3t"
+        password = "topSekr3t"  # nosec B105 # used for testing
         crypted = p.encrypt_pin(password)
         text = p.decrypt_pin(crypted)
         assert (text == password)

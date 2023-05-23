@@ -171,7 +171,6 @@ from .log import log_with
 from configobj import ConfigObj
 
 from operator import itemgetter
-import six
 import logging
 from ..models import (Policy, db, save_config_timestamp, Token)
 from privacyidea.lib.config import (get_token_classes, get_token_types,
@@ -195,7 +194,6 @@ import datetime
 import re
 import ast
 import traceback
-from six import string_types
 
 log = logging.getLogger(__name__)
 
@@ -296,8 +294,8 @@ class ACTION(object):
     REALM = "realm"
     REGISTRATIONCODE_LENGTH = "registration.length"
     REGISTRATIONCODE_CONTENTS = "registration.contents"
-    PASSWORD_LENGTH = "pw.length"
-    PASSWORD_CONTENTS = "pw.contents"
+    PASSWORD_LENGTH = "pw.length"  # nosec B105 # policy name
+    PASSWORD_CONTENTS = "pw.contents"  # nosec B105 # policy name
     REMOTE_USER = "remote_user"
     REQUIREDEMAIL = "requiredemail"
     RESET = "reset"
@@ -376,7 +374,7 @@ class ACTION(object):
     STATISTICSREAD = "statistics_read"
     STATISTICSDELETE = "statistics_delete"
     LOGIN_TEXT = "login_text"
-    DIALOG_NO_TOKEN = "dialog_no_token"
+    DIALOG_NO_TOKEN = "dialog_no_token"  # nosec B105 # policy name
     SHOW_ANDROID_AUTHENTICATOR = "show_android_privacyidea_authenticator"
     SHOW_IOS_AUTHENTICATOR = "show_ios_privacyidea_authenticator"
     SHOW_CUSTOM_AUTHENTICATOR = "show_custom_authenticator"
@@ -389,6 +387,9 @@ class ACTION(object):
     TOKENGROUP_LIST = "tokengroup_list"
     TOKENGROUP_ADD = "tokengroup_add"
     TOKENGROUP_DELETE = "tokengroup_delete"
+    SERVICEID_LIST = "serviceid_list"
+    SERVICEID_ADD = "serviceid_add"
+    SERVICEID_DELETE = "serviceid_delete"
     PREFERREDCLIENTMODE = "preferred_client_mode"
     REQUIRE_DESCRIPTION = "require_description"
 
@@ -409,7 +410,7 @@ class GROUP(object):
     will be grouped in the UI."""
     TOOLS = "tools"
     SYSTEM = "system"
-    TOKEN = "token"
+    TOKEN = "token"  # nosec B105 # group name
     ENROLLMENT = "enrollment"
     GENERAL = "general"
     MACHINE = "machine"
@@ -418,7 +419,8 @@ class GROUP(object):
     MODIFYING_RESPONSE = "modifying response"
     CONDITIONS = "conditions"
     SETTING_ACTIONS = "setting actions"
-    TOKENGROUP= "tokengroup"
+    TOKENGROUP = "tokengroup"
+    SERVICEID = "service ID"
 
 
 class MAIN_MENU(object):
@@ -472,7 +474,7 @@ class CONDITION_SECTION(object):
     __doc__ = """This is a list of available sections for conditions of policies """
     USERINFO = "userinfo"
     TOKENINFO = "tokeninfo"
-    TOKEN = "token"
+    TOKEN = "token"  # nosec B105 # section name
     HTTP_REQUEST_HEADER = "HTTP Request header"
     HTTP_ENVIRONMENT = "HTTP Environment"
 
@@ -1220,7 +1222,7 @@ class PolicyClass(object):
                 if action_value:
                     rights.add(action)
                     # if the action has an actual non-boolean value, return it
-                    if isinstance(action_value, string_types):
+                    if isinstance(action_value, str):
                         rights.add("{}={}".format(action, action_value))
         # check if we have policies at all:
         pols = self.list_policies(scope=scope, active=True)
@@ -1995,6 +1997,21 @@ def get_static_policy_definitions(scope=None):
                 'desc': _("The Admin is allowed delete a tokengroup."),
                 'mainmenu': [MAIN_MENU.CONFIG],
                 'group': GROUP.TOKENGROUP},
+            ACTION.SERVICEID_LIST: {
+                'type': 'bool',
+                'desc': _("The Admin is allowed list the available service ID definitions."),
+                'mainmenu': [MAIN_MENU.CONFIG],
+                'group': GROUP.SERVICEID},
+            ACTION.SERVICEID_ADD: {
+                'type': 'bool',
+                'desc': _("The Admin is allowed to add a new service ID definition."),
+                'mainmenu': [MAIN_MENU.CONFIG],
+                'group': GROUP.SERVICEID},
+            ACTION.SERVICEID_DELETE: {
+                'type': 'bool',
+                'desc': _("The Admin is allowed delete a service ID definition."),
+                'mainmenu': [MAIN_MENU.CONFIG],
+                'group': GROUP.SERVICEID},
             ACTION.TOKENGROUPS: {
                 'type': 'bool',
                 'desc': _("The Admin is allowed to manage the tokengroups of a token."),

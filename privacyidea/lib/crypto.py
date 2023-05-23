@@ -44,19 +44,16 @@ calling function handle the data.
 
 This lib.crypto is tested in tests/test_lib_crypto.py
 """
-from __future__ import division
 import hmac
 import logging
 from hashlib import sha256
 import random
 import string
 import binascii
-import six
 import ctypes
 
 import base64
 import traceback
-from six import PY2
 from passlib.context import CryptContext
 from privacyidea.lib.log import log_with
 from privacyidea.lib.error import HSMException
@@ -73,22 +70,10 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 
-import passlib.hash
-from passlib.hash import argon2
-try:
-    # For Python 3.6 and above
-    from secrets import compare_digest
-except ImportError:
-    # For Python 2.7 and above
-    from hmac import compare_digest
-
 
 def safe_compare(a, b):
-    return compare_digest(to_bytes(a), to_bytes(b))
+    return hmac.compare_digest(to_bytes(a), to_bytes(b))
 
-
-if not PY2:
-    long = int
 
 ROUNDS = 9
 
@@ -100,7 +85,7 @@ ROUNDS = 9
 DEFAULT_HASH_ALGO_LIST = ['argon2', 'pbkdf2_sha512']
 DEFAULT_HASH_ALGO_PARAMS = {'argon2__rounds': ROUNDS}
 
-FAILED_TO_DECRYPT_PASSWORD = "FAILED TO DECRYPT PASSWORD!"
+FAILED_TO_DECRYPT_PASSWORD = "FAILED TO DECRYPT PASSWORD!"  # nosec B105 # placeholder in case of error
 
 log = logging.getLogger(__name__)
 
@@ -140,7 +125,7 @@ class SecretObj(object):
         '''
         self._setupKey_()
         backend = default_backend()
-        cipher = Cipher(algorithms.AES(self.bkey), modes.ECB(), backend=backend)
+        cipher = Cipher(algorithms.AES(self.bkey), modes.ECB(), backend=backend)  # nosec B305 # part of Yubikey specification
         decryptor = cipher.decryptor()
         msg_bin = decryptor.update(enc_data) + decryptor.finalize()
         self._clearKey_(preserve=self.preserve)
@@ -304,7 +289,7 @@ def encryptPassword(password):
 
     This function returns a unicode string with a
     hexlified contents of the IV and the encrypted data separated by a
-    colon like u"4956:44415441"
+    colon like "4956:44415441"
 
     :param password: the password
     :type password: bytes or str
@@ -687,8 +672,8 @@ def zerome(bufferObject):
 
 
 def _slow_rsa_verify_raw(key, sig, msg):
-    assert isinstance(sig, six.integer_types)
-    assert isinstance(msg, six.integer_types)
+    assert isinstance(sig, int)
+    assert isinstance(msg, int)
     if hasattr(key, 'public_numbers'):
         pn = key.public_numbers()
     elif hasattr(key, 'private_numbers'):  # pragma: no cover
@@ -780,7 +765,7 @@ class Sign(object):
 
         sver = ''
         try:
-            sver, signature = six.text_type(signature).split(':')
+            sver, signature = str(signature).split(':')
         except ValueError:
             # if the signature does not contain a colon we assume an old style signature.
             pass
@@ -839,7 +824,7 @@ def create_hsm_object(config):
                 hsm_parameters[param] = config.get(key)
         logging_params = dict(hsm_parameters)
         if "password" in logging_params:
-            logging_params["password"] = "XXXX"
+            logging_params["password"] = "XXXX"  # nosec B105 # Hide password
         log.info("calling HSM module with parameters {0}".format(logging_params))
 
     return hsm_class(hsm_parameters)

@@ -15,7 +15,7 @@ import jwt
 import mock
 import datetime
 import warnings
-from six.moves.urllib.parse import quote
+from urllib.parse import quote
 from privacyidea.lib.error import AuthError
 from privacyidea.lib.token import init_token, remove_token
 
@@ -82,7 +82,7 @@ class UtilsTestCase(MyApiTestCase):
                                 algorithm="RS256")
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', category=DeprecationWarning)
-            self.assertRaisesRegexp(
+            self.assertRaisesRegex(
                 AuthError,
                 "The username hanswurst is not allowed to impersonate via JWT.",
                 verify_auth_token, auth_token=auth_token, required_role="user")
@@ -97,7 +97,7 @@ class UtilsTestCase(MyApiTestCase):
                                 algorithm="RS256")
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', category=DeprecationWarning)
-            self.assertRaisesRegexp(
+            self.assertRaisesRegex(
                 AuthError,
                 "The username kleinerhans is not allowed to impersonate via JWT.",
                 verify_auth_token, auth_token=auth_token, required_role="user")

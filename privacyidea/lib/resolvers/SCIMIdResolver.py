@@ -44,7 +44,7 @@ from .UserIdResolver import UserIdResolver
 import yaml
 import requests
 import base64
-from six.moves.urllib.parse import urlencode
+from urllib.parse import urlencode
 from privacyidea.lib.utils import to_bytes, to_unicode, convert_column_to_unicode
 
 log = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class IdResolver (UserIdResolver):
         self.auth_server = ''
         self.resource_server = ''
         self.auth_client = 'localhost'
-        self.auth_secret = ''
+        self.auth_secret = ''  # nosec B105 # default parameter
         self.access_token = None
 
     def checkPass(self, uid, password):

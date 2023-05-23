@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function
 from setuptools import setup, find_packages
 import os
 import stat
 import sys
 
 #VERSION = "2.1dev4"
-VERSION = "3.8.1dev1"
+VERSION = "3.8.1"
 
 # Taken from kennethreitz/requests/setup.py
 package_directory = os.path.realpath(os.path.dirname(__file__))
@@ -60,7 +59,8 @@ install_requires = ["beautifulsoup4[lxml]>=4.3.2",
                     "requests>=2.7.0",
                     "segno>=1.5",
                     "smpplib>=2.0",
-                    "SQLAlchemy>=1.4.0"]
+                    "SQLAlchemy>=1.4.0,<2.0",
+                    "MarkupSafe<2.1"]
 
 
 def get_man_pages(dir):
